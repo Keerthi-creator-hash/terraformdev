@@ -1,7 +1,3 @@
-data "aws_key_pair" "existing" {
-  key_name = var.key_name
-}
-
 # Latest Ubuntu AMI from Canonical
 data "aws_ami" "ubuntu" {
   most_recent = true
@@ -29,7 +25,7 @@ resource "aws_vpc" "main" {
 
   tags = {
     Name = "${var.project_name}-vpc"
-   
+
   }
 }
 
@@ -38,7 +34,7 @@ resource "aws_internet_gateway" "this" {
 
   tags = {
     Name = "${var.project_name}-igw"
-      
+
   }
 }
 
@@ -51,7 +47,7 @@ resource "aws_subnet" "public" {
 
   tags = {
     Name = "${var.project_name}-public-${count.index + 1}"
-      
+
   }
 }
 
@@ -66,7 +62,7 @@ resource "aws_subnet" "private" {
 
   tags = {
     Name = "${var.project_name}-private-${count.index + 1}"
-      
+
   }
 }
 
@@ -80,7 +76,7 @@ resource "aws_route_table" "public" {
 
   tags = {
     Name = "${var.project_name}-public-rt"
-      
+
   }
 }
 
@@ -95,7 +91,7 @@ resource "aws_eip" "nat" {
 
   tags = {
     Name = "${var.project_name}-nat-eip"
-      
+
   }
 }
 
@@ -105,7 +101,7 @@ resource "aws_nat_gateway" "this" {
 
   tags = {
     Name = "${var.project_name}-nat"
-      
+
   }
 }
 
@@ -119,7 +115,7 @@ resource "aws_route_table" "private" {
 
   tags = {
     Name = "${var.project_name}-private-rt"
-      
+
   }
 }
 
@@ -162,7 +158,7 @@ resource "aws_security_group" "alb_sg" {
 
   tags = {
     Name = "${var.project_name}-alb-sg"
-      
+
   }
 }
 
@@ -196,7 +192,7 @@ resource "aws_security_group" "ec2_sg" {
 
   tags = {
     Name = "${var.project_name}-ec2-sg"
-      
+
   }
 }
 
@@ -222,7 +218,7 @@ resource "aws_security_group" "rds_sg" {
 
   tags = {
     Name = "${var.project_name}-rds-sg"
-      
+
   }
 }
 
@@ -248,57 +244,8 @@ resource "aws_security_group" "elasticache_sg" {
 
   tags = {
     Name = "${var.project_name}-elasticache-sg"
-      
+
   }
-}
-
-# -------------------------
-# ACM CERTIFICATE
-# -------------------------
-resource "aws_acm_certificate" "this" {
-  domain_name               = var.domain_name
-  subject_alternative_names = ["*.${var.domain_name}"]
-  validation_method         = "DNS"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  tags = {
-    Name = "${var.project_name}-cert"
-      
-  }
-}
-
-resource "aws_route53_zone" "this" {
-  name = var.domain_name
-
-  tags = {
-    Name = "${var.project_name}-zone"
-      
-  }
-}
-
-resource "aws_route53_record" "cert_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.this.domain_validation_options : dvo.domain_name => {
-      name   = dvo.resource_record_name
-      record = dvo.resource_record_value
-      type   = dvo.resource_record_type
-    }
-  }
-
-  allow_overwrite = true
-  name            = each.value.name
-  records         = [each.value.record]
-  ttl             = 60
-  type            = each.value.type
-  zone_id         = aws_route53_zone.this.zone_id
-}
-
-resource "aws_acm_certificate_validation" "this" {
-  certificate_arn         = aws_acm_certificate.this.arn
-  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
 }
 
 # -------------------------
@@ -313,7 +260,7 @@ resource "aws_lb" "api_alb" {
 
   tags = {
     Name = "${var.project_name}-alb"
-      
+
   }
 }
 
@@ -379,7 +326,7 @@ resource "aws_lb_target_group" "api_tg" {
 
   tags = {
     Name = "${var.project_name}-tg"
-      
+
   }
 }
 
@@ -413,7 +360,7 @@ resource "aws_lb_listener" "https" {
 }
 
 resource "aws_route53_record" "api" {
-  zone_id = aws_route53_zone.this.zone_id
+  zone_id = var.route53_zone_id
   name    = var.domain_name
   type    = "A"
 
@@ -431,7 +378,7 @@ resource "aws_launch_template" "api_lt" {
   name_prefix   = "${var.project_name}-lt-"
   image_id      = data.aws_ami.ubuntu.id
   instance_type = var.instance_type
-  key_name      = data.aws_key_pair.existing.key_name
+  key_name      = aws_key_pair.generated.key_name
 
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
 
@@ -502,7 +449,7 @@ resource "aws_db_subnet_group" "this" {
 
   tags = {
     Name = "${var.project_name}-db-subnet-group"
-      
+
   }
 }
 
@@ -525,7 +472,7 @@ resource "aws_db_instance" "this" {
 
   tags = {
     Name = "${var.project_name}-rds"
-      
+
   }
 }
 
@@ -538,7 +485,7 @@ resource "aws_elasticache_subnet_group" "this" {
 
   tags = {
     Name = "${var.project_name}-cache-subnet-group"
-      
+
   }
 }
 
@@ -571,7 +518,7 @@ resource "aws_s3_bucket" "app" {
 
   tags = {
     Name           = "${var.project_name}-bucket"
-    environment    = "Not production"     
+    environment    = "Not production"
     classification = "moderate"
   }
 }
@@ -580,8 +527,8 @@ resource "aws_secretsmanager_secret" "db" {
   name = "${var.project_name}/db"
 
   tags = {
-    Name = "${var.project_name}/db"
-    environment    = "Not production"     
+    Name           = "${var.project_name}/db"
+    environment    = "Not production"
     classification = "moderate"
   }
 }

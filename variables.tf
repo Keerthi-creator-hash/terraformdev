@@ -1,7 +1,13 @@
 variable "aws_region" {
   description = "AWS region"
   type        = string
-  default     = "us-east-1"
+  default     = "ap-south-1"
+}
+
+variable "aws_profile" {
+  description = "AWS CLI profile name for target account"
+  type        = string
+  default     = "stavir"
 }
 
 variable "project_name" {
@@ -32,7 +38,7 @@ variable "availability_zones" {
 }
 
 variable "key_name" {
-  description = "Existing EC2 key pair name"
+  description = "Name for the EC2 key pair that Terraform will create"
   type        = string
   default     = "dev"
 }
@@ -114,5 +120,10 @@ variable "cache_node_type" {
 variable "domain_name" {
   description = "Domain name for ACM certificate"
   type        = string
-  default     = "example.com"
+  default     = "stavir.com"
+}
+
+variable "route53_zone_id" {
+  description = "Existing public Route53 hosted zone ID to use for DNS records"
+  type        = string
 }

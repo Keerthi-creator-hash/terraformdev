@@ -33,3 +33,11 @@ output "s3_bucket_name" {
 output "db_secret_arn" {
   value = aws_secretsmanager_secret.db.arn
 }
+
+output "ec2_key_pair_name" {
+  value = aws_key_pair.generated.key_name
+}
+
+output "ec2_private_key_pem_path" {
+  value = local_file.ec2_private_key_pem.filename
+}
