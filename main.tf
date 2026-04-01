@@ -18,6 +18,16 @@ data "aws_ami" "ubuntu" {
 # -------------------------
 # NETWORK - NEW VPC
 # -------------------------
+check "public_private_az_count" {
+  assert {
+    condition = (
+      length(var.public_subnet_cidrs) == length(var.availability_zones) &&
+      length(var.private_subnet_cidrs) == length(var.availability_zones)
+    )
+    error_message = "Each public and private subnet is mapped to availability_zones[index]: all three lists must have the same length."
+  }
+}
+
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
@@ -351,7 +361,7 @@ resource "aws_lb_listener" "https" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = aws_acm_certificate_validation.this.certificate_arn
+  certificate_arn   = var.acm_certificate_arn
 
   default_action {
     type             = "forward"
@@ -359,6 +369,8 @@ resource "aws_lb_listener" "https" {
   }
 }
 
+# Route 53 API alias disabled for now — restore with ACM / DNS when ready
+/*
 resource "aws_route53_record" "api" {
   zone_id = var.route53_zone_id
   name    = var.domain_name
@@ -370,6 +382,7 @@ resource "aws_route53_record" "api" {
     evaluate_target_health = true
   }
 }
+*/
 
 # -------------------------
 # COMPUTE (ASG)
@@ -453,15 +466,13 @@ resource "aws_db_subnet_group" "this" {
   }
 }
 
+locals {
+  rds_from_snapshot = var.rds_snapshot_identifier != null && trimspace(var.rds_snapshot_identifier) != ""
+}
+
 resource "aws_db_instance" "this" {
   identifier              = "${var.project_name}-rds"
-  allocated_storage       = var.db_allocated_storage
-  engine                  = "mysql"
-  engine_version          = "8.0"
   instance_class          = var.db_instance_class
-  db_name                 = var.db_name
-  username                = var.db_username
-  password                = var.db_password
   db_subnet_group_name    = aws_db_subnet_group.this.name
   vpc_security_group_ids  = [aws_security_group.rds_sg.id]
   multi_az                = false
@@ -469,6 +480,15 @@ resource "aws_db_instance" "this" {
   skip_final_snapshot     = true
   deletion_protection     = false
   backup_retention_period = 1
+
+  snapshot_identifier = local.rds_from_snapshot ? var.rds_snapshot_identifier : null
+
+  allocated_storage = local.rds_from_snapshot ? null : var.db_allocated_storage
+  engine            = local.rds_from_snapshot ? null : "mysql"
+  engine_version    = local.rds_from_snapshot ? null : "8.0"
+  db_name           = local.rds_from_snapshot ? null : var.db_name
+  username          = local.rds_from_snapshot ? null : var.db_username
+  password          = local.rds_from_snapshot ? null : var.db_password
 
   tags = {
     Name = "${var.project_name}-rds"
@@ -524,10 +544,10 @@ resource "aws_s3_bucket" "app" {
 }
 
 resource "aws_secretsmanager_secret" "db" {
-  name = "${var.project_name}/db"
+  name = coalesce(var.db_secret_name, "${var.project_name}/db")
 
   tags = {
-    Name           = "${var.project_name}/db"
+    Name           = coalesce(var.db_secret_name, "${var.project_name}/db")
     environment    = "Not production"
     classification = "moderate"
   }
