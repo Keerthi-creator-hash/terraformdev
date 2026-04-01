@@ -23,17 +23,17 @@ variable "vpc_cidr" {
 }
 
 variable "public_subnet_cidrs" {
-  description = "Public subnet CIDRs for ALB/NAT"
+  description = "Public subnet CIDRs (one per AZ); index i uses availability_zones[i]"
   type        = list(string)
 }
 
 variable "private_subnet_cidrs" {
-  description = "Private subnet CIDRs for ASG/RDS/ElastiCache"
+  description = "Private subnet CIDRs (one per AZ); index i uses availability_zones[i]"
   type        = list(string)
 }
 
 variable "availability_zones" {
-  description = "AZs for subnets"
+  description = "AZs for subnets; must match the length of public_subnet_cidrs and private_subnet_cidrs"
   type        = list(string)
 }
 
@@ -51,7 +51,7 @@ variable "instance_type" {
 
 variable "asg_desired" {
   type    = number
-  default = 2
+  default = 1
 }
 
 variable "asg_min" {
@@ -61,7 +61,7 @@ variable "asg_min" {
 
 variable "asg_max" {
   type    = number
-  default = 3
+  default = 2
 }
 
 variable "api_port" {
@@ -94,6 +94,13 @@ variable "db_password" {
   sensitive   = true
 }
 
+variable "db_secret_name" {
+  description = "Secrets Manager secret name to store DB connection info. Must be unique in the account/region."
+  type        = string
+  default     = null
+  nullable    = true
+}
+
 variable "db_instance_class" {
   description = "RDS instance class"
   type        = string
@@ -104,6 +111,13 @@ variable "db_allocated_storage" {
   description = "RDS storage"
   type        = number
   default     = 20
+}
+
+variable "rds_snapshot_identifier" {
+  description = "If set, RDS instance is created by restoring from this snapshot (e.g. rds:mydb-2026-04-01-00-00). Use null for a new empty instance. Master user and DB name come from the snapshot; align db_username, db_name in tfvars and the Secrets Manager secret with the restored instance."
+  type        = string
+  default     = null
+  nullable    = true
 }
 
 variable "s3_bucket_name" {
@@ -117,8 +131,13 @@ variable "cache_node_type" {
   default     = "cache.t3.micro"
 }
 
+variable "acm_certificate_arn" {
+  description = "ARN of an issued ACM certificate in the same region as the ALB for the HTTPS listener"
+  type        = string
+}
+
 variable "domain_name" {
-  description = "Domain name for ACM certificate"
+  description = "Primary domain (e.g. for Route 53 when enabled)"
   type        = string
   default     = "stavir.com"
 }
